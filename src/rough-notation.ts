@@ -8,13 +8,10 @@ type AnnotationState = 'unattached' | 'not-showing' | 'showing';
 class RoughAnnotationImpl implements RoughAnnotation {
   private _state: AnnotationState = 'unattached';
   private _config: RoughAnnotationConfig;
-  private _resizing = false;
-  private _ro?: any; // ResizeObserver is not supported in typescript std lib yet
   private _seed = randomSeed();
 
   private _e: HTMLElement;
   private _svg?: SVGSVGElement;
-  private _lastSizes: Rect[] = [];
 
   _animationDelay = 0;
 
@@ -57,20 +54,6 @@ class RoughAnnotationImpl implements RoughAnnotation {
     }
   }
 
-  private _resizeListener = () => {
-    if (!this._resizing) {
-      this._resizing = true;
-      setTimeout(() => {
-        this._resizing = false;
-        if (this._state === 'showing') {
-          if (this.haveRectsChanged()) {
-            this.show();
-          }
-        }
-      }, 400);
-    }
-  }
-
   private attach() {
     if (this._state === 'unattached' && this._e.parentElement) {
       ensureKeyframes();
@@ -96,58 +79,7 @@ class RoughAnnotationImpl implements RoughAnnotation {
           this._e.style.position = 'relative';
         }
       }
-      this.attachListeners();
     }
-  }
-
-  private detachListeners() {
-    window.removeEventListener('resize', this._resizeListener);
-    if (this._ro) {
-      this._ro.unobserve(this._e);
-    }
-  }
-
-  private attachListeners() {
-    this.detachListeners();
-    window.addEventListener('resize', this._resizeListener, { passive: true });
-    if ((!this._ro) && ('ResizeObserver' in window)) {
-      this._ro = new (window as any).ResizeObserver((entries: any) => {
-        for (const entry of entries) {
-          if (entry.contentRect) {
-            this._resizeListener();
-          }
-        }
-      });
-    }
-    if (this._ro) {
-      this._ro.observe(this._e);
-    }
-  }
-
-  private haveRectsChanged(): boolean {
-    if (this._lastSizes.length) {
-      const newRects = this.rects();
-      if (newRects.length === this._lastSizes.length) {
-        for (let i = 0; i < newRects.length; i++) {
-          if (!this.isSameRect(newRects[i], this._lastSizes[i])) {
-            return true;
-          }
-        }
-      } else {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private isSameRect(rect1: Rect, rect2: Rect): boolean {
-    const si = (a: number, b: number) => Math.round(a) === Math.round(b);
-    return (
-      si(rect1.x, rect2.x) &&
-      si(rect1.y, rect2.y) &&
-      si(rect1.w, rect2.w) &&
-      si(rect1.h, rect2.h)
-    );
   }
 
   isShowing(): boolean {
@@ -200,7 +132,6 @@ class RoughAnnotationImpl implements RoughAnnotation {
     }
     this._svg = undefined;
     this._state = 'unattached';
-    this.detachListeners();
   }
 
   private render(svg: SVGSVGElement, ensureNoAnimation: boolean) {
@@ -220,7 +151,6 @@ class RoughAnnotationImpl implements RoughAnnotation {
       renderAnnotation(svg, rects[i], config, delay + this._animationDelay, ad, this._seed);
       delay += ad;
     }
-    this._lastSizes = rects;
     this._state = 'showing';
   }
 
